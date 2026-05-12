@@ -20,28 +20,38 @@
     <!-- 홈 -->
     <section data-view="home" class="view active">
       <div class="card hero">
-        <div class="hero-label">오늘 혈당</div>
+        <div class="hero-greet" id="hero-greet">안녕하세요 👋</div>
         <div class="hero-row">
           <div>
             <div class="hero-value" id="today-avg">--</div>
-            <div class="hero-sub">평균 mg/dL</div>
+            <div class="hero-sub">오늘 평균</div>
           </div>
           <div>
-            <div class="hero-value" id="today-count">0</div>
-            <div class="hero-sub">기록 수</div>
+            <div class="hero-value" id="week-avg">--</div>
+            <div class="hero-sub">7일 평균</div>
           </div>
           <div>
-            <div class="hero-value" id="today-inrange">--</div>
-            <div class="hero-sub">범위 내</div>
+            <div class="hero-value" id="med-today">0/4</div>
+            <div class="hero-sub">약 복용</div>
           </div>
         </div>
       </div>
+
+      <div id="alerts-wrap"></div>
 
       <div class="quick-grid">
         <button class="quick" data-quick="fasting">공복</button>
         <button class="quick" data-quick="before_meal">식전</button>
         <button class="quick" data-quick="after_meal">식후</button>
         <button class="quick" data-quick="bedtime">취침전</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title-row">
+          <div class="card-title">오늘의 약</div>
+          <button class="link-btn" data-nav="meds" type="button">전체 보기</button>
+        </div>
+        <ul id="med-today-list" class="med-list"></ul>
       </div>
 
       <div class="card">
@@ -56,7 +66,6 @@
         <button class="tab active" data-tab="glucose">혈당</button>
         <button class="tab" data-tab="meal">식사</button>
         <button class="tab" data-tab="exercise">운동</button>
-        <button class="tab" data-tab="medication">약</button>
       </div>
 
       <form id="form-glucose" class="card form" data-form="glucose">
@@ -68,6 +77,7 @@
             <option value="fasting">공복</option>
             <option value="before_meal">식전</option>
             <option value="after_meal" selected>식후 2시간</option>
+            <option value="after_meal_4h">식후 4시간</option>
             <option value="bedtime">취침 전</option>
             <option value="random">기타</option>
           </select>
@@ -75,9 +85,10 @@
         <label>시간
           <input type="datetime-local" name="at" />
         </label>
-        <label>메모
-          <input type="text" name="note" maxlength="120" placeholder="선택" />
+        <label>메모 (식사·운동·음주 등)
+          <input type="text" name="note" maxlength="120" placeholder="예: 비빔국수, 소주, 회식" />
         </label>
+        <div id="keyword-hint" class="hint-box hidden"></div>
         <button type="submit" class="primary">저장</button>
       </form>
 
@@ -99,7 +110,7 @@
 
       <form id="form-exercise" class="card form hidden" data-form="exercise">
         <label>운동 종류
-          <input type="text" name="value" required maxlength="60" placeholder="예: 걷기, 자전거" />
+          <input type="text" name="value" required maxlength="60" placeholder="예: 걷기, 제자리걷기" />
         </label>
         <label>시간 (분)
           <input type="number" name="duration" inputmode="numeric" min="1" max="600" />
@@ -112,22 +123,30 @@
         </label>
         <button type="submit" class="primary">저장</button>
       </form>
+    </section>
 
-      <form id="form-medication" class="card form hidden" data-form="medication">
-        <label>약품명
-          <input type="text" name="value" required maxlength="60" placeholder="예: 메트포민" />
-        </label>
-        <label>용량
-          <input type="text" name="dose" maxlength="40" placeholder="예: 500mg" />
-        </label>
-        <label>시각
-          <input type="datetime-local" name="at" />
-        </label>
-        <label>메모
-          <input type="text" name="note" maxlength="120" placeholder="선택" />
-        </label>
-        <button type="submit" class="primary">저장</button>
-      </form>
+    <!-- 약 -->
+    <section data-view="meds" class="view">
+      <div class="card">
+        <div class="card-title">처방 정보</div>
+        <div class="kv"><span>처방 시작</span><strong id="rx-start">--</strong></div>
+        <div class="kv"><span>처방 종료</span><strong id="rx-end">--</strong></div>
+        <div class="kv"><span>남은 일수</span><strong id="rx-dday">--</strong></div>
+        <div class="kv"><span>병원</span><strong id="rx-hospital">--</strong></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title-row">
+          <div class="card-title">오늘 복용</div>
+          <span id="med-date-label" class="meta">--</span>
+        </div>
+        <ul id="med-full-list" class="med-list"></ul>
+      </div>
+
+      <div class="card">
+        <div class="card-title">최근 7일 복용률</div>
+        <ul id="med-adherence" class="adh-list"></ul>
+      </div>
     </section>
 
     <!-- 통계 -->
@@ -149,6 +168,9 @@
           <div><div class="stat-num" id="stat-inrange">--</div><div class="stat-label">범위 내</div></div>
           <div><div class="stat-num" id="stat-low">--</div><div class="stat-label">저혈당</div></div>
           <div><div class="stat-num" id="stat-high">--</div><div class="stat-label">고혈당</div></div>
+        </div>
+        <div class="stats-row">
+          <div><div class="stat-num" id="stat-hba1c">--</div><div class="stat-label">추정 HbA1c</div></div>
         </div>
       </div>
 
@@ -186,6 +208,23 @@
         <button type="submit" class="primary">저장</button>
       </form>
 
+      <form id="form-profile" class="card form">
+        <div class="card-title">프로필</div>
+        <label>이름
+          <input type="text" name="name" maxlength="30" />
+        </label>
+        <label>진단일
+          <input type="date" name="diagnosisDate" />
+        </label>
+        <label>병원
+          <input type="text" name="hospital" maxlength="40" />
+        </label>
+        <label>담당의
+          <input type="text" name="doctor" maxlength="40" />
+        </label>
+        <button type="submit" class="primary">저장</button>
+      </form>
+
       <div class="card">
         <div class="card-title">데이터 관리</div>
         <div class="btn-row">
@@ -195,8 +234,9 @@
             <input id="import-input" type="file" accept="application/json" hidden />
           </label>
         </div>
-        <button id="reset-btn" class="danger" type="button">모든 데이터 삭제</button>
-        <p class="hint">데이터는 이 휴대폰의 브라우저에만 저장됩니다. 앱을 삭제하거나 브라우저 데이터를 지우면 사라지니 가끔 내보내기로 백업하세요.</p>
+        <button id="seed-btn" class="ghost full" type="button">실측 시드 데이터 다시 불러오기</button>
+        <button id="reset-btn" class="danger full" type="button">모든 데이터 삭제</button>
+        <p class="hint">데이터는 이 휴대폰의 브라우저에만 저장됩니다. 가끔 내보내기로 백업하세요.</p>
       </div>
     </section>
   </main>
@@ -204,6 +244,7 @@
   <nav class="tabbar">
     <button class="navbtn active" data-nav="home"><span>홈</span></button>
     <button class="navbtn" data-nav="log"><span>기록</span></button>
+    <button class="navbtn" data-nav="meds"><span>약</span></button>
     <button class="navbtn" data-nav="stats"><span>통계</span></button>
     <button class="navbtn" data-nav="settings"><span>설정</span></button>
   </nav>
@@ -211,6 +252,7 @@
   <div id="toast" class="toast"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="seed.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

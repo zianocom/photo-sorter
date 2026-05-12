@@ -1,8 +1,9 @@
-const CACHE = 'bg-note-v1';
+const CACHE = 'bg-note-v2';
 const ASSETS = [
   './',
   './index.html',
   './app.js',
+  './seed.js',
   './styles.css',
   './manifest.webmanifest',
   './icon.svg',
