@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>혈당 노트</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1 id="page-title">홈</h1>
+    <button id="install-btn" class="ghost hidden" type="button">설치</button>
+  </header>
+
+  <main id="app">
+    <!-- 홈 -->
+    <section data-view="home" class="view active">
+      <div class="card hero">
+        <div class="hero-label">오늘 혈당</div>
+        <div class="hero-row">
+          <div>
+            <div class="hero-value" id="today-avg">--</div>
+            <div class="hero-sub">평균 mg/dL</div>
+          </div>
+          <div>
+            <div class="hero-value" id="today-count">0</div>
+            <div class="hero-sub">기록 수</div>
+          </div>
+          <div>
+            <div class="hero-value" id="today-inrange">--</div>
+            <div class="hero-sub">범위 내</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="quick-grid">
+        <button class="quick" data-quick="fasting">공복</button>
+        <button class="quick" data-quick="before_meal">식전</button>
+        <button class="quick" data-quick="after_meal">식후</button>
+        <button class="quick" data-quick="bedtime">취침전</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">최근 기록</div>
+        <ul id="recent-list" class="list"></ul>
+      </div>
+    </section>
+
+    <!-- 기록 -->
+    <section data-view="log" class="view">
+      <div class="tabs">
+        <button class="tab active" data-tab="glucose">혈당</button>
+        <button class="tab" data-tab="meal">식사</button>
+        <button class="tab" data-tab="exercise">운동</button>
+        <button class="tab" data-tab="medication">약</button>
+      </div>
+
+      <form id="form-glucose" class="card form" data-form="glucose">
+        <label>혈당 (mg/dL)
+          <input type="number" name="value" inputmode="numeric" min="20" max="600" required />
+        </label>
+        <label>시점
+          <select name="context">
+            <option value="fasting">공복</option>
+            <option value="before_meal">식전</option>
+            <option value="after_meal" selected>식후 2시간</option>
+            <option value="bedtime">취침 전</option>
+            <option value="random">기타</option>
+          </select>
+        </label>
+        <label>시간
+          <input type="datetime-local" name="at" />
+        </label>
+        <label>메모
+          <input type="text" name="note" maxlength="120" placeholder="선택" />
+        </label>
+        <button type="submit" class="primary">저장</button>
+      </form>
+
+      <form id="form-meal" class="card form hidden" data-form="meal">
+        <label>식사 내용
+          <input type="text" name="value" required maxlength="120" placeholder="예: 잡곡밥, 닭가슴살" />
+        </label>
+        <label>탄수화물 (g)
+          <input type="number" name="carbs" inputmode="numeric" min="0" max="500" placeholder="선택" />
+        </label>
+        <label>시간
+          <input type="datetime-local" name="at" />
+        </label>
+        <label>메모
+          <input type="text" name="note" maxlength="120" placeholder="선택" />
+        </label>
+        <button type="submit" class="primary">저장</button>
+      </form>
+
+      <form id="form-exercise" class="card form hidden" data-form="exercise">
+        <label>운동 종류
+          <input type="text" name="value" required maxlength="60" placeholder="예: 걷기, 자전거" />
+        </label>
+        <label>시간 (분)
+          <input type="number" name="duration" inputmode="numeric" min="1" max="600" />
+        </label>
+        <label>시각
+          <input type="datetime-local" name="at" />
+        </label>
+        <label>메모
+          <input type="text" name="note" maxlength="120" placeholder="선택" />
+        </label>
+        <button type="submit" class="primary">저장</button>
+      </form>
+
+      <form id="form-medication" class="card form hidden" data-form="medication">
+        <label>약품명
+          <input type="text" name="value" required maxlength="60" placeholder="예: 메트포민" />
+        </label>
+        <label>용량
+          <input type="text" name="dose" maxlength="40" placeholder="예: 500mg" />
+        </label>
+        <label>시각
+          <input type="datetime-local" name="at" />
+        </label>
+        <label>메모
+          <input type="text" name="note" maxlength="120" placeholder="선택" />
+        </label>
+        <button type="submit" class="primary">저장</button>
+      </form>
+    </section>
+
+    <!-- 통계 -->
+    <section data-view="stats" class="view">
+      <div class="tabs">
+        <button class="tab active" data-range="7">7일</button>
+        <button class="tab" data-range="30">30일</button>
+        <button class="tab" data-range="90">90일</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">평균 / 최저 / 최고</div>
+        <div class="stats-row">
+          <div><div class="stat-num" id="stat-avg">--</div><div class="stat-label">평균</div></div>
+          <div><div class="stat-num" id="stat-min">--</div><div class="stat-label">최저</div></div>
+          <div><div class="stat-num" id="stat-max">--</div><div class="stat-label">최고</div></div>
+        </div>
+        <div class="stats-row">
+          <div><div class="stat-num" id="stat-inrange">--</div><div class="stat-label">범위 내</div></div>
+          <div><div class="stat-num" id="stat-low">--</div><div class="stat-label">저혈당</div></div>
+          <div><div class="stat-num" id="stat-high">--</div><div class="stat-label">고혈당</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">추세</div>
+        <canvas id="chart-trend" height="220"></canvas>
+      </div>
+
+      <div class="card">
+        <div class="card-title">시점별 평균</div>
+        <canvas id="chart-context" height="200"></canvas>
+      </div>
+    </section>
+
+    <!-- 설정 -->
+    <section data-view="settings" class="view">
+      <form id="form-settings" class="card form">
+        <div class="card-title">목표 범위 (mg/dL)</div>
+        <label>공복 최저
+          <input type="number" name="fastingMin" inputmode="numeric" min="40" max="200" />
+        </label>
+        <label>공복 최고
+          <input type="number" name="fastingMax" inputmode="numeric" min="60" max="300" />
+        </label>
+        <label>식후 최고
+          <input type="number" name="afterMealMax" inputmode="numeric" min="80" max="400" />
+        </label>
+        <label>저혈당 기준
+          <input type="number" name="lowThreshold" inputmode="numeric" min="40" max="100" />
+        </label>
+        <label class="row-toggle">
+          <span>범위 벗어나면 경고 표시</span>
+          <input type="checkbox" name="alertOnOutOfRange" />
+        </label>
+        <button type="submit" class="primary">저장</button>
+      </form>
+
+      <div class="card">
+        <div class="card-title">데이터 관리</div>
+        <div class="btn-row">
+          <button id="export-btn" class="ghost" type="button">내보내기 (JSON)</button>
+          <label class="ghost btn-label">
+            가져오기
+            <input id="import-input" type="file" accept="application/json" hidden />
+          </label>
+        </div>
+        <button id="reset-btn" class="danger" type="button">모든 데이터 삭제</button>
+        <p class="hint">데이터는 이 휴대폰의 브라우저에만 저장됩니다. 앱을 삭제하거나 브라우저 데이터를 지우면 사라지니 가끔 내보내기로 백업하세요.</p>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabbar">
+    <button class="navbtn active" data-nav="home"><span>홈</span></button>
+    <button class="navbtn" data-nav="log"><span>기록</span></button>
+    <button class="navbtn" data-nav="stats"><span>통계</span></button>
+    <button class="navbtn" data-nav="settings"><span>설정</span></button>
+  </nav>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
