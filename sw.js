@@ -1,5 +1,5 @@
 /* 서비스 워커 — 홈 화면 설치 및 오프라인 캐싱용 */
-const CACHE = "seolyu-v1";
+const CACHE = "seolyu-v2";
 const ASSETS = [
   "./",
   "./index.html",

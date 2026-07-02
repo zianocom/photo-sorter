@@ -24,10 +24,75 @@ const els = {
   resultBody: document.querySelector("#resultTable tbody"),
   saveBtn: document.getElementById("saveBtn"),
   saveHint: document.getElementById("saveHint"),
+  savedTag: document.getElementById("savedTag"),
 };
 
 // 업로드된 항목: { file, url, businessName, title, isCover, error }
 let items = [];
+
+/* ---------- 기기 저장 (IndexedDB) ----------
+ * 사진과 분석 결과를 브라우저에 저장해, 앱을 닫았다 다시 열어도 이어서 볼 수 있게 한다.
+ * (이 기기·이 브라우저에만 저장됨) */
+function idb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open("seolyu-db", 1);
+    req.onupgradeneeded = () => req.result.createObjectStore("kv");
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function saveSession() {
+  try {
+    const recs = items.map((it) => ({
+      name: it.file.name,
+      type: it.file.type,
+      blob: it.file, // 원본 이미지 그대로 저장
+      businessName: it.businessName,
+      title: it.title,
+      isCover: it.isCover,
+      error: it.error,
+    }));
+    const db = await idb();
+    await new Promise((res, rej) => {
+      const tx = db.transaction("kv", "readwrite");
+      tx.objectStore("kv").put(recs, "current");
+      tx.oncomplete = res;
+      tx.onerror = () => rej(tx.error);
+    });
+    markSaved();
+  } catch (e) {
+    console.warn("자동 저장 실패:", e);
+  }
+}
+async function loadSession() {
+  const db = await idb();
+  return new Promise((res, rej) => {
+    const tx = db.transaction("kv", "readonly");
+    const rq = tx.objectStore("kv").get("current");
+    rq.onsuccess = () => res(rq.result || []);
+    rq.onerror = () => rej(rq.error);
+  });
+}
+async function clearSession() {
+  try {
+    const db = await idb();
+    await new Promise((res, rej) => {
+      const tx = db.transaction("kv", "readwrite");
+      tx.objectStore("kv").delete("current");
+      tx.oncomplete = res;
+      tx.onerror = () => rej(tx.error);
+    });
+  } catch (e) {
+    console.warn("저장 삭제 실패:", e);
+  }
+}
+let savedTimer = null;
+function markSaved() {
+  if (!els.savedTag) return;
+  els.savedTag.textContent = "기기에 저장됨 ✓";
+  clearTimeout(savedTimer);
+  savedTimer = setTimeout(() => (els.savedTag.textContent = ""), 2500);
+}
 
 /* ---------- API 키 기억 ---------- */
 els.apiKey.value = localStorage.getItem("anthropic_api_key") || "";
@@ -66,6 +131,7 @@ function addFiles(fileList) {
     items.push({ file, url: URL.createObjectURL(file), businessName: "", title: "", isCover: false, error: null });
   }
   renderThumbs();
+  saveSession(); // 올린 사진을 즉시 저장
 }
 
 function renderThumbs() {
@@ -82,11 +148,13 @@ function renderThumbs() {
 }
 
 els.clearBtn.addEventListener("click", () => {
+  if (!confirm("올린 사진과 분석 결과를 모두 지울까요? (기기 저장분도 삭제됩니다)")) return;
   items.forEach((it) => URL.revokeObjectURL(it.url));
   items = [];
   renderThumbs();
   els.resultCard.hidden = true;
   els.progress.textContent = "";
+  clearSession();
 });
 
 /* ---------- 이미지 → 리사이즈된 base64 (JPEG) ---------- */
@@ -128,28 +196,40 @@ const EXTRACT_PROMPT = `당신은 점검 서류 사진을 정리하는 전문가
 
 async function analyzeOne(item, apiKey, model) {
   const img = await fileToBase64(item.file);
-  const res = await fetch(API_URL, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": API_VERSION,
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 512,
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "image", source: { type: "base64", media_type: img.mediaType, data: img.data } },
-            { type: "text", text: EXTRACT_PROMPT },
-          ],
-        },
-      ],
-    }),
-  });
+  // 응답이 안 오면 무한 대기하지 않도록 60초 타임아웃
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60000);
+  let res;
+  try {
+    res = await fetch(API_URL, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": API_VERSION,
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 512,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "image", source: { type: "base64", media_type: img.mediaType, data: img.data } },
+              { type: "text", text: EXTRACT_PROMPT },
+            ],
+          },
+        ],
+      }),
+    });
+  } catch (e) {
+    if (e.name === "AbortError") throw new Error("응답 시간 초과(60초). 네트워크나 API 키를 확인하세요.");
+    throw new Error("네트워크 오류: " + e.message);
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!res.ok) {
     const body = await res.text();
@@ -199,6 +279,7 @@ els.analyzeBtn.addEventListener("click", async () => {
   els.analyzeBtn.disabled = false;
   els.clearBtn.disabled = false;
   els.resultCard.hidden = false;
+  saveSession(); // 분석 결과 저장
 });
 
 /* ---------- 그룹핑: 사업명 없으면 직전 표지의 사업명으로 ---------- */
@@ -239,6 +320,7 @@ function renderResults() {
       const k = e.target.dataset.k;
       items[i][k] = k === "isCover" ? e.target.checked : e.target.value.trim();
       if (k === "isCover") renderResults();
+      saveSession(); // 수정 내용 저장
     });
   });
 }
@@ -389,3 +471,39 @@ function concat(parts) {
   }
   return out;
 }
+
+/* ---------- 앱 시작 시 저장된 작업 복원 ---------- */
+(async function restore() {
+  let recs = [];
+  try {
+    recs = await loadSession();
+  } catch (e) {
+    console.warn("복원 실패:", e);
+    return;
+  }
+  if (!recs.length) return;
+
+  items = recs.map((r) => {
+    const file = new File([r.blob], r.name || "photo.jpg", { type: r.type || "image/jpeg" });
+    return {
+      file,
+      url: URL.createObjectURL(file),
+      businessName: r.businessName || "",
+      title: r.title || "",
+      isCover: !!r.isCover,
+      error: r.error || null,
+    };
+  });
+
+  renderThumbs();
+
+  // 이미 분석된 결과가 있으면 결과 표까지 복원
+  const analyzed = items.some((it) => it.title || it.businessName);
+  if (analyzed) {
+    renderResults();
+    els.resultCard.hidden = false;
+    els.progress.textContent = `이전 작업 복원됨 (${items.length}장) — 이어서 확인하거나 저장하세요`;
+  } else {
+    els.progress.textContent = `저장된 사진 ${items.length}장 복원됨`;
+  }
+})();
