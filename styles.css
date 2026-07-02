@@ -94,6 +94,7 @@ button.ghost { background: transparent; color: var(--muted); border: 1px solid v
 button.ghost:hover:not(:disabled) { background: #f0f2f5; }
 
 .progress { color: var(--muted); font-size: 13px; }
+.saved-tag { color: #2eb669; font-size: 13px; font-weight: 600; }
 
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
