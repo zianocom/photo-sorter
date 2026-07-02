@@ -1,19 +1,15 @@
 /* 점검서류 사진 분류기
  * 1) 사진 업로드(순서 유지)
- * 2) Claude Vision으로 사업명 · 서류 제목 · 표지 여부 추출
+ * 2) 브라우저 내장 OCR(Tesseract.js, 오프라인)로 사업명 라벨 · 서류 제목 · 표지 여부 추출
  * 3) 사업명이 없는 사진은 직전 표지의 사업명으로 묶음
  * 4) 서류 제목을 파일명으로, 사업명 폴더에 저장
  */
 
-const API_URL = "https://api.anthropic.com/v1/messages";
-const API_VERSION = "2023-06-01";
-const MAX_EDGE = 1568; // Claude 권장 최대 변, 비용/속도 절감을 위해 리사이즈
+const MAX_EDGE = 2000; // OCR 인식률을 위한 최대 변(비용 제약이 없으므로 기존보다 크게)
 const UNCLASSIFIED = "미분류";
 
 // 화면 요소
 const els = {
-  apiKey: document.getElementById("apiKey"),
-  model: document.getElementById("model"),
   dropzone: document.getElementById("dropzone"),
   fileInput: document.getElementById("fileInput"),
   thumbs: document.getElementById("thumbs"),
@@ -94,17 +90,6 @@ function markSaved() {
   savedTimer = setTimeout(() => (els.savedTag.textContent = ""), 2500);
 }
 
-/* ---------- API 키 기억 ---------- */
-els.apiKey.value = localStorage.getItem("anthropic_api_key") || "";
-els.apiKey.addEventListener("change", () =>
-  localStorage.setItem("anthropic_api_key", els.apiKey.value.trim())
-);
-const savedModel = localStorage.getItem("anthropic_model");
-if (savedModel) els.model.value = savedModel;
-els.model.addEventListener("change", () =>
-  localStorage.setItem("anthropic_model", els.model.value.trim())
-);
-
 /* ---------- 업로드 (드래그 & 클릭) ---------- */
 els.dropzone.addEventListener("click", () => els.fileInput.click());
 els.fileInput.addEventListener("change", (e) => addFiles(e.target.files));
@@ -157,8 +142,8 @@ els.clearBtn.addEventListener("click", () => {
   clearSession();
 });
 
-/* ---------- 이미지 → 리사이즈된 base64 (JPEG) ---------- */
-function fileToBase64(file) {
+/* ---------- 이미지 → 리사이즈된 데이터 URL (JPEG) ---------- */
+function resizeToDataUrl(file) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
@@ -172,8 +157,7 @@ function fileToBase64(file) {
       canvas.width = width;
       canvas.height = height;
       canvas.getContext("2d").drawImage(img, 0, 0, width, height);
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-      resolve({ mediaType: "image/jpeg", data: dataUrl.split(",")[1] });
+      resolve(canvas.toDataURL("image/jpeg", 0.9));
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
@@ -183,86 +167,80 @@ function fileToBase64(file) {
   });
 }
 
-/* ---------- Claude 호출 ---------- */
-const EXTRACT_PROMPT = `당신은 점검 서류 사진을 정리하는 전문가입니다. 첨부한 이미지 한 장을 보고 아래 항목을 JSON 객체로만 답하세요. 설명이나 코드블록 없이 순수 JSON만 출력하세요.
+/* ---------- OCR 결과 → 사업명 · 제목 · 표지 여부 추출 ----------
+ * Claude Vision과 달리 문맥 유추가 안 되므로, 서류에 "사업명:" 같은
+ * 라벨이 인쇄되어 있어야 인식된다. */
+const BUSINESS_LABELS = ["사업명", "공사명", "현장명", "사업장명", "건명"];
+const BUSINESS_RE = new RegExp(`(?:${BUSINESS_LABELS.join("|")})\\s*[:：]?\\s*(.+)`);
+const TITLE_KEYWORDS = [
+  "점검표", "점검 결과서", "점검결과서", "확인서", "성적서", "검사성적서",
+  "보고서", "판정서", "검사조서", "완료보고서", "사용전검사", "정기검사",
+  "정밀점검", "안전점검",
+];
 
-- businessName: 서류에 적힌 "사업명"(사업 이름/현장명/공사명). 사진 안에 명확히 보이지 않으면 반드시 null.
-- title: 이 서류의 내용을 나타내는 제목(문서명/서식명). 파일명으로 쓸 것이므로 간결하고 명확하게. 예: "소방시설 점검표", "전기안전 점검 결과서".
-- isCover: 이 사진이 표지(겉표지/속표지 등 제목만 크게 있는 페이지)로 보이면 true, 일반 내용 페이지면 false.
-- documentType: 서류 종류(선택, 모르면 null).
+function extractFields(text) {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 
-반드시 이 형식의 JSON 하나만 출력하세요:
-{"businessName": null, "title": "...", "isCover": false, "documentType": null}`;
-
-async function analyzeOne(item, apiKey, model) {
-  const img = await fileToBase64(item.file);
-  // 응답이 안 오면 무한 대기하지 않도록 60초 타임아웃
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 60000);
-  let res;
-  try {
-    res = await fetch(API_URL, {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": API_VERSION,
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 512,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "image", source: { type: "base64", media_type: img.mediaType, data: img.data } },
-              { type: "text", text: EXTRACT_PROMPT },
-            ],
-          },
-        ],
-      }),
-    });
-  } catch (e) {
-    if (e.name === "AbortError") throw new Error("응답 시간 초과(60초). 네트워크나 API 키를 확인하세요.");
-    throw new Error("네트워크 오류: " + e.message);
-  } finally {
-    clearTimeout(timer);
+  let businessName = "";
+  for (const line of lines) {
+    const m = line.match(BUSINESS_RE);
+    if (m && m[1].trim()) {
+      businessName = m[1].trim();
+      break;
+    }
   }
 
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`API 오류 ${res.status}: ${body.slice(0, 200)}`);
+  let title = "";
+  for (const line of lines) {
+    if (TITLE_KEYWORDS.some((k) => line.includes(k))) {
+      title = line;
+      break;
+    }
   }
-  const data = await res.json();
-  const text = (data.content || []).map((c) => c.text || "").join("").trim();
-  return parseJson(text);
+
+  return { businessName, title, isCover: !!businessName };
 }
 
-function parseJson(text) {
-  // 코드블록/여분 텍스트가 섞여도 첫 JSON 객체를 추출
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("JSON 파싱 실패: " + text.slice(0, 120));
-  return JSON.parse(match[0]);
+let ocrWorker = null;
+async function getOcrWorker() {
+  if (!ocrWorker) {
+    ocrWorker = await Tesseract.createWorker("kor", 1, {
+      workerPath: "vendor/tesseract/worker.min.js",
+      corePath: "vendor/tesseract/tesseract-core-lstm.js",
+      langPath: "vendor/tesseract/lang",
+      workerBlobURL: false,
+      gzip: true,
+    });
+  }
+  return ocrWorker;
+}
+
+async function analyzeOne(item, worker) {
+  const dataUrl = await resizeToDataUrl(item.file);
+  const { data } = await worker.recognize(dataUrl);
+  return extractFields(data.text || "");
 }
 
 /* ---------- 분석 실행 ---------- */
 els.analyzeBtn.addEventListener("click", async () => {
-  const apiKey = els.apiKey.value.trim();
-  const model = els.model.value.trim() || "claude-sonnet-5";
-  if (!apiKey) {
-    alert("Anthropic API 키를 입력하세요.");
-    return;
-  }
-
   els.analyzeBtn.disabled = true;
   els.clearBtn.disabled = true;
+  els.progress.textContent = "OCR 엔진 준비 중…";
+
+  let worker;
+  try {
+    worker = await getOcrWorker();
+  } catch (e) {
+    els.progress.textContent = "OCR 엔진을 불러오지 못했습니다: " + e.message;
+    els.analyzeBtn.disabled = false;
+    els.clearBtn.disabled = false;
+    return;
+  }
 
   for (let i = 0; i < items.length; i++) {
     els.progress.textContent = `분석 중… (${i + 1}/${items.length})`;
     try {
-      const r = await analyzeOne(items[i], apiKey, model);
+      const r = await analyzeOne(items[i], worker);
       items[i].businessName = (r.businessName || "").trim();
       items[i].title = (r.title || "").trim();
       items[i].isCover = !!r.isCover;

@@ -1,5 +1,5 @@
 /* 서비스 워커 — 홈 화면 설치 및 오프라인 캐싱용 */
-const CACHE = "seolyu-v2";
+const CACHE = "seolyu-v3";
 const ASSETS = [
   "./",
   "./index.html",
@@ -9,6 +9,11 @@ const ASSETS = [
   "./icon-192.png",
   "./icon-512.png",
   "./apple-touch-icon.png",
+  "./vendor/tesseract/tesseract.min.js",
+  "./vendor/tesseract/worker.min.js",
+  "./vendor/tesseract/tesseract-core-lstm.js",
+  "./vendor/tesseract/tesseract-core-lstm.wasm",
+  "./vendor/tesseract/lang/kor.traineddata.gz",
 ];
 
 self.addEventListener("install", (e) => {
@@ -27,7 +32,7 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
-  // 앱 파일만 캐시 우선(cache-first). API(anthropic 등) 호출은 항상 네트워크로.
+  // 같은 출처(앱 파일 + OCR 엔진)만 캐시 우선(cache-first).
   if (url.origin === location.origin) {
     e.respondWith(
       caches.match(e.request).then((r) => r || fetch(e.request))
