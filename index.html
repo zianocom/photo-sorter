@@ -2,9 +2,18 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>SuViNote · 점검서류 사진 분류</title>
   <link rel="stylesheet" href="styles.css" />
+
+  <!-- PWA: 홈 화면에 추가 -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#2f6feb" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="서류분류" />
 </head>
 <body>
   <header>
@@ -69,5 +78,13 @@
   </main>
 
   <script src="app.js"></script>
+  <script>
+    // 서비스 워커 등록 (홈 화면 설치 · 오프라인 지원)
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () =>
+        navigator.serviceWorker.register("sw.js").catch(() => {})
+      );
+    }
+  </script>
 </body>
 </html>

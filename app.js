@@ -297,9 +297,10 @@ async function saveToFolder() {
   els.saveHint.textContent = `✅ ${saved}장을 사업명 폴더로 저장했습니다.`;
 }
 
-// File System Access 미지원 브라우저: 파일명 앞에 [사업명]을 붙여 개별 다운로드
+// File System Access 미지원(주로 모바일): 사업명 폴더 구조를 담은 ZIP 한 개로 다운로드
 async function saveByDownload() {
   const used = {};
+  const entries = [];
   for (const it of items) {
     const folder = sanitize(it.businessName || UNCLASSIFIED);
     const base = sanitize(it.title);
@@ -307,14 +308,84 @@ async function saveByDownload() {
     const key = folder + "/" + base;
     used[key] = (used[key] || 0) + 1;
     const suffix = used[key] > 1 ? `_${used[key]}` : "";
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(it.file);
-    a.download = `[${folder}] ${base}${suffix}.${ext}`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    await new Promise((r) => setTimeout(r, 150)); // 다운로드 순차 처리
+    entries.push({ name: `${folder}/${base}${suffix}.${ext}`, data: it.file });
   }
+  const blob = await buildZip(entries);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "점검서류_분류.zip";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
   els.saveHint.textContent =
-    "✅ 다운로드했습니다. (이 브라우저는 폴더 저장을 지원하지 않아 파일명에 [사업명]을 붙였습니다. Chrome/Edge에서는 폴더로 저장됩니다.)";
+    "✅ 사업명 폴더 구조를 담은 ZIP을 다운로드했습니다. 압축을 풀면 사업명별로 정리됩니다.";
+}
+
+/* ---------- 최소 ZIP 생성기 (압축 없음, store 방식) ---------- */
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(bytes) {
+  let c = 0xffffffff;
+  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+async function buildZip(entries) {
+  const enc = new TextEncoder();
+  const chunks = [];
+  const central = [];
+  let offset = 0;
+
+  const u16 = (n) => new Uint8Array([n & 0xff, (n >> 8) & 0xff]);
+  const u32 = (n) => new Uint8Array([n & 0xff, (n >> 8) & 0xff, (n >> 16) & 0xff, (n >>> 24) & 0xff]);
+
+  for (const e of entries) {
+    const nameBytes = enc.encode(e.name);
+    const data = new Uint8Array(await e.data.arrayBuffer());
+    const crc = crc32(data);
+
+    // 로컬 파일 헤더
+    const local = concat([
+      u32(0x04034b50), u16(20), u16(0x0800), u16(0), u16(0), u16(0), // UTF-8 이름 플래그
+      u32(crc), u32(data.length), u32(data.length),
+      u16(nameBytes.length), u16(0), nameBytes, data,
+    ]);
+    chunks.push(local);
+
+    // 중앙 디렉터리 항목
+    central.push(concat([
+      u32(0x02014b50), u16(20), u16(20), u16(0x0800), u16(0), u16(0), u16(0),
+      u32(crc), u32(data.length), u32(data.length),
+      u16(nameBytes.length), u16(0), u16(0), u16(0), u16(0), u32(0),
+      u32(offset), nameBytes,
+    ]));
+    offset += local.length;
+  }
+
+  const centralBlob = concat(central);
+  const end = concat([
+    u32(0x06054b50), u16(0), u16(0),
+    u16(entries.length), u16(entries.length),
+    u32(centralBlob.length), u32(offset), u16(0),
+  ]);
+  return new Blob([...chunks, centralBlob, end], { type: "application/zip" });
+}
+
+function concat(parts) {
+  let len = 0;
+  for (const p of parts) len += p.length;
+  const out = new Uint8Array(len);
+  let o = 0;
+  for (const p of parts) {
+    out.set(p, o);
+    o += p.length;
+  }
+  return out;
 }

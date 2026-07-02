@@ -1,0 +1,17 @@
+{
+  "name": "점검서류 사진 분류기",
+  "short_name": "서류분류",
+  "description": "사진을 업로드하면 사업명·서류 제목을 읽어 자동 분류합니다.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6f8",
+  "theme_color": "#2f6feb",
+  "orientation": "portrait",
+  "lang": "ko",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
