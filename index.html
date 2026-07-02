@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>SuViNote · 점검서류 사진 분류</title>
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- PWA: 홈 화면에 추가 -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#2f6feb" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="서류분류" />
+</head>
+<body>
+  <header>
+    <h1>📁 점검서류 사진 분류기</h1>
+    <p class="sub">사진을 업로드하면 Claude가 <b>사업명</b>과 <b>서류 제목</b>을 읽어 자동으로 분류하고, 제목을 파일명으로 만들어 사업명 폴더에 저장합니다.</p>
+  </header>
+
+  <main>
+    <!-- 설정 -->
+    <section class="card">
+      <h2>1. 설정</h2>
+      <div class="field">
+        <label for="apiKey">Anthropic API 키</label>
+        <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off" />
+        <small>브라우저에만 저장됩니다(localStorage). 서버로 전송하지 않습니다.</small>
+      </div>
+      <div class="field">
+        <label for="model">모델</label>
+        <input type="text" id="model" value="claude-sonnet-5" />
+        <small>이미지 분석이 가능한 Claude 모델. 기본값 권장.</small>
+      </div>
+    </section>
+
+    <!-- 업로드 -->
+    <section class="card">
+      <h2>2. 사진 업로드</h2>
+      <div id="dropzone" class="dropzone">
+        <p>여기로 사진을 끌어다 놓거나 클릭해서 선택하세요</p>
+        <p class="hint">여러 장을 한 번에 올릴 수 있습니다. <b>업로드 순서가 중요합니다</b> — 사업명이 없는 사진은 바로 앞 표지의 사업명으로 묶입니다.</p>
+        <input type="file" id="fileInput" accept="image/*" multiple hidden />
+      </div>
+      <div id="thumbs" class="thumbs"></div>
+      <div class="actions">
+        <button id="analyzeBtn" disabled>분석 시작</button>
+        <button id="clearBtn" class="ghost" disabled>초기화</button>
+        <span id="progress" class="progress"></span>
+      </div>
+    </section>
+
+    <!-- 결과 -->
+    <section class="card" id="resultCard" hidden>
+      <h2>3. 분류 결과 <small>(저장 전 수정 가능)</small></h2>
+      <div class="table-wrap">
+        <table id="resultTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>미리보기</th>
+              <th>사업명 (폴더)</th>
+              <th>서류 제목 → 파일명</th>
+              <th>표지</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="actions">
+        <button id="saveBtn">사업명 폴더로 저장</button>
+        <small id="saveHint"></small>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    // 서비스 워커 등록 (홈 화면 설치 · 오프라인 지원)
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () =>
+        navigator.serviceWorker.register("sw.js").catch(() => {})
+      );
+    }
+  </script>
+</body>
+</html>
