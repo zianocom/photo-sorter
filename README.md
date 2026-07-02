@@ -1,4 +1,4 @@
-# SuViNote · 점검서류 사진 분류기
+# 점검서류 사진 분류기
 
 점검 서류 사진을 업로드하면 **Claude Vision**이 각 사진에서 **사업명**과 **서류 제목**을 읽어,
 자동으로 **사업명별 폴더**에 분류하고 **서류 제목을 파일명**으로 만들어 저장합니다.
@@ -38,7 +38,7 @@
 GitHub Pages로 무료 배포됩니다.
 1. 이 PR을 `main`에 병합합니다.
 2. 저장소 **Settings → Pages → Build and deployment → Source** 를 **"GitHub Actions"** 로 설정합니다.
-3. 배포가 끝나면 주소가 생깁니다: `https://zianocom.github.io/suvinote-releases/`
+3. 배포가 끝나면 주소가 생깁니다: `https://zianocom.github.io/photo-sorter/`
    - (병합 전에 먼저 써 보려면 Settings → Pages 에서 "Deploy from a branch" 로 이 브랜치를 선택해도 됩니다.)
 
 ### 2) 폰에서 홈 화면에 추가
